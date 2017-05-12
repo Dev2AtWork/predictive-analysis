@@ -2,7 +2,7 @@
 """
 Created on Mon May  8 13:13:58 2017
 
-@author: dev2atwork
+@author: abhin067
 """
 #%matplotlib inline
 import pandas as pd
@@ -20,6 +20,8 @@ from datetime import date
 from sklearn.model_selection import cross_val_score
 from sklearn.metrics import accuracy_score
 from sklearn.externals import joblib
+from sklearn.model_selection import GridSearchCV
+from time import time
 
 def GetOptimizedFeaturedDataSetLR(X, y):
     adj_rsquared_arr = []
@@ -140,6 +142,29 @@ linearModel,score_LM,feature_indices,pred_LM,y_test_LM = GetLinearRegressorModel
 RFModel,score_RF,predictions,y_test_RF = GetRandomForestModelAndScore(X,y)
 plotLMvsRF(y_test_LM,pred_LM,y_test_RF,predictions)
 
+# use a full grid over all parameters
+param_grid = {"max_depth": [None,10,100],
+              "max_features": [10,100,200,300],
+              "min_samples_split": [10,100,1000],
+              "min_samples_leaf": [1, 3, 10],
+              "bootstrap": [True, False],
+              #"criterion": ["gini", "entropy"]
+              }
+grid_search = GridSearchCV(RFModel, param_grid=param_grid,cv=2)
+start = time()
+grid_search.fit(X, y)
+print("GridSearchCV took %.2f seconds for %d candidate parameter settings."
+      % (time() - start, len(grid_search.cv_results_['params'])))
+report(grid_search.cv_results_)
+
+from sklearn.ensemble import GradientBoostingRegressor
+gradient_boost_reg = GradientBoostingRegressor(n_estimators=300,learning_rate=0.05,random_state=0)
+grad_boost_model = gradient_boost_reg.fit(X,y)
+score_grad_boost = GetModelScore(grad_boost_model,X_train,y_train,10)
+print(score_grad_boost.mean())
+X_train, X_test, y_train, y_test = SplitDataSetTrainTest(X,y)
+
+
 from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.datasets import load_iris
 from sklearn.feature_selection import SelectFromModel
@@ -166,6 +191,9 @@ feature_importance = reg.feature_importances_
 np_arr = np.array(y_test, dtype=pd.Float64Index)
 score = accuracy_score(np_arr[0], predictions[0])
 accuracy_score(y_test, pred)
+
+
+
 
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn import linear_model
