@@ -22,6 +22,13 @@ from sklearn.metrics import accuracy_score
 from sklearn.externals import joblib
 from sklearn.model_selection import GridSearchCV
 from time import time
+import configparser
+from sklearn.externals import joblib
+from sklearn.ensemble import GradientBoostingRegressor
+
+config = configparser.ConfigParser()
+config.read("config.ini")
+_filepath = config.get("File","filepath")
 
 def GetOptimizedFeaturedDataSetLR(X, y):
     adj_rsquared_arr = []
@@ -37,7 +44,6 @@ def GetOptimizedFeaturedDataSetLR(X, y):
     
     #return dataset with best features
     x_best_fit_obj = SelectKBest(f_regression,k=col_count - adj_rsquared_arr.index(max(adj_rsquared_arr)))
-    #x_best_fit_obj = SelectKBest(f_regression,k=293)
     x_best = x_best_fit_obj.fit_transform(X,y)
     indices = x_best_fit_obj.fit(X,y).get_support(indices=True)
     return x_best,indices
@@ -46,7 +52,6 @@ def GetOptimizedFeaturedDataSetLR(X, y):
 def GenerateLinearRegressionModel(X_train,Y_train):
     lm = LinearRegression()
     lm.fit(X_train,y_train)
-    #prediction=lm.predict(X_test)
     return lm 
 
 #Random Forest Model
@@ -63,7 +68,6 @@ def GetDataPostSanitization(_filePath):
     y = pd.DataFrame(dataframe.iloc[:,-1])
     #Drop Y value column
     df_y_dropped = dataframe.drop(list(y.columns.values),axis=1)
-    #df_y_dropped = dataframe
     
     #Date Cloumn Formatting
     #Get all String Columns name list
@@ -127,82 +131,69 @@ def GetRandomForestModelAndScore(X, y):
     reg = RandomForestRegressor(n_estimators=500,random_state=0)
     reg.fit(X_train,y_train)
     score = GetModelScore(reg,X_train,y_train,10)
+    score = GetModelScore(reg,X,y,10)
     preds = reg.predict(X_test)
     return reg,score.mean(),preds,y_test
 
-def plotLMvsRF(y_test_LM, pred_LM, y_test_RF, pred_RF):
-    plt.ylim([0,1000000])
-    plt.xlim([0,1000000])
-    plt.scatter(y_test_LM, pred_LM,color="red")
-    plt.scatter(y_test_RF, pred_RF,color="blue")
+def GetGradientBoostModelAndScore(X,y):
+    X_train, X_test, y_train, y_test = SplitDataSetTrainTest(X,y)
+    gradient_boost_reg = GradientBoostingRegressor(n_estimators=300,learning_rate=0.05,random_state=0)
+    grad_boost_model = gradient_boost_reg.fit(X_train,y_train)
+    score_grad_boost = GetModelScore(grad_boost_model,X_train,y_train,10)
+    preds = grad_boost_model.predict(X_test)
+    return grad_boost_model,score_grad_boost.mean(),preds,y_test
 
-_filePath = "Melbourne_housing_data_blank_removed.csv"
-X,y = GetDataPostSanitization(_filePath)
-linearModel,score_LM,feature_indices,pred_LM,y_test_LM = GetLinearRegressorModelAndScore(X,y)
-RFModel,score_RF,predictions,y_test_RF = GetRandomForestModelAndScore(X,y)
-plotLMvsRF(y_test_LM,pred_LM,y_test_RF,predictions)
+def plotModelScatter(y_test_LM, pred_LM,plotName, x_low_lim=0,x_high_lim=1000000,y_low_lim=0,y_high_lim=1000000,color='red'):
+    plt.ylim([y_low_lim,y_high_lim])
+    plt.xlim([x_low_lim,x_high_lim])
+    plt.scatter(y_test_LM, pred_LM,color=color)
+    plt.savefig(plotName+'.png')
 
-# use a full grid over all parameters
-param_grid = {"max_depth": [None,10,100],
+def GetHyperParametersTuned(model, X, y):
+    # use a full grid over all parameters
+    param_grid = {"max_depth": [None,10,100],
               "max_features": [10,100,200,300],
               "min_samples_split": [10,100,1000],
               "min_samples_leaf": [1, 3, 10],
               "bootstrap": [True, False],
               #"criterion": ["gini", "entropy"]
               }
-grid_search = GridSearchCV(RFModel, param_grid=param_grid,cv=2)
-start = time()
-grid_search.fit(X, y)
-print("GridSearchCV took %.2f seconds for %d candidate parameter settings."
-      % (time() - start, len(grid_search.cv_results_['params'])))
-report(grid_search.cv_results_)
+    grid_search = GridSearchCV(model, param_grid=param_grid,cv=2)
+    grid_search.fit(X, y)
+    return grid_search.best_params_
 
-from sklearn.ensemble import GradientBoostingRegressor
-gradient_boost_reg = GradientBoostingRegressor(n_estimators=300,learning_rate=0.05,random_state=0)
-grad_boost_model = gradient_boost_reg.fit(X,y)
-score_grad_boost = GetModelScore(grad_boost_model,X_train,y_train,10)
-print(score_grad_boost.mean())
-X_train, X_test, y_train, y_test = SplitDataSetTrainTest(X,y)
+def ExportClassifier(model, model_Name):
+    joblib.dump(model, 'model_Name'+'pk1')
+    return True
 
+def ImportClassifier(model_Name):
+    try:
+        model = joblib.load(model_Name)
+        return model
+    except:
+        return None
 
-from sklearn.ensemble import ExtraTreesClassifier
-from sklearn.datasets import load_iris
-from sklearn.feature_selection import SelectFromModel
-clf = ExtraTreesClassifier()
-clf = clf.fit(X, y)
-rf_features=[]
-rf_features=clf.feature_importances_
-model = SelectFromModel(clf, prefit=True)
-X_new = model.transform(X)
-X_new.shape(150, 2)
-
-#reg = RandomForestRegressor(n_estimators=500,random_state=0)
-#reg.fit(X_train,y_train)
-
-percent_diff_other = ((y_test - pred)/(y_test))*100
-from sklearn import datasets
-from sklearn import metrics
-from sklearn.ensemble import ExtraTreesClassifier
-dataset = datasets.load_iris()
-model = ExtraTreesClassifier()
-model.fit()
-from sklearn.metrics import accuracy_score
-feature_importance = reg.feature_importances_
-np_arr = np.array(y_test, dtype=pd.Float64Index)
-score = accuracy_score(np_arr[0], predictions[0])
-accuracy_score(y_test, pred)
-
-
-
-
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn import linear_model
-poly = PolynomialFeatures(degree=2)
-X_train_ = poly.fit_transform(X_train)
-y_train_ = poly.fit_transform(y_train)
-X_test_ = poly.fit_transform(X_test)
-#X_train, X_test, y_train, y_test = train_test_split(X_, y_, test_size=0.2,random_state=0)
-preds = GenerateLinearRegressionModel(X_train, y_train, X_test)
-
-from sklearn.model_selection import cross_val_score
-scores=cross_val_score(estimator=reg,X=X_train,y=y_train,cv=10)
+_param_list='Rooms=2,Distance=2.5,Postcode=3067,Bedroom2=2,Bathroom=1,Car=0,Landsize=156,BuildingArea=79,YearBuilt=1900,Days=0,Suburb=Abbotsford,Type=h,Method=S,SellerG=Biggin,CouncilArea=Yarra'
+def Predict(_model, _param_list):
+    model = ImportClassifier(_model)
+    _params = _param_list.split(",")
+    index=[]
+    value=[]
+    for param in _params:
+        index.append(param.split("=")[0])
+        value.append(param.split("=")[1])
+    df=pd.DataFrame(value,index).T
+    
+def train(_filePath):
+    X,y = GetDataPostSanitization(_filePath)
+    linearModel,score_LM,feature_indices,pred_LM,y_test_LM = GetLinearRegressorModelAndScore(X,y)
+    ExportClassifier(linearModel,"Linear_Model")
+    RFModel,score_RF,predictions,y_test_RF = GetRandomForestModelAndScore(X,y)
+    ExportClassifier(RFModel,"Linear_Model")
+    GBModel,score_GB,pred_GB,y_test_GB = GetGradientBoostModelAndScore(X,y)
+    ExportClassifier(GBModel,"Linear_Model")
+    plotModelScatter(y_test_LM,pred_LM,'linearModel',0,1000000,0,1000000,'blue')
+    plotModelScatter(y_test_RF,predictions,'RandomForestModel',0,1000000,0,1000000,'Green')
+    plotModelScatter(y_test_GB,pred_GB,'GradientBoostModel',0,1000000,0,1000000,'red')
+    
+train("Melbourne_housing_data_blank_removed.csv")
