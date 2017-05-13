@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import statsmodels.formula.api as st
 import seaborn as sns
 import bisect
+import tensorflow
 from sklearn.feature_selection import SelectKBest 
 from sklearn.feature_selection import f_regression
 from sklearn.linear_model import LinearRegression
@@ -25,6 +26,8 @@ from time import time
 import configparser
 from sklearn.externals import joblib
 from sklearn.ensemble import GradientBoostingRegressor
+import shutil
+import os
 
 config = configparser.ConfigParser()
 config.read("config.ini")
@@ -95,10 +98,10 @@ def ConvertDateFieldsToDays(dataframe):
     return df_other
 
 def ConvertCategoricalDataInDummies(dataframe):
+    dataframe=df_y_dropped_date_converted
     #Converting categorical data into numbers
     _str_Cols = list(dataframe.select_dtypes(include=['object']).columns.values)    
-    dummies = pd.get_dummies(dataframe,columns=_str_Cols)
-    
+    dummies = pd.get_dummies(dataframe,columns=_str_Cols)    
     #Drop last column for statistical data consistency
     return dataframe.drop(dataframe,axis=1).join(dummies)
 
@@ -184,6 +187,17 @@ def ImportClassifier(model_Name):
     except:
         return None
 
+def createDirectory(_filePath,_problemStatement):
+    if os.path.exists(_problemStatement):
+        shutil.rmtree(_problemStatement)
+    os.makedirs(_problemStatement)
+    os.makedirs(os.path.join(_problemStatement, 'Data'))
+    os.makedirs(os.path.join(_problemStatement, 'Plots'))
+    os.makedirs(os.path.join(_problemStatement, 'Models'))
+
+    #Copying data files
+    shutil.copy2(_filePath, os.path.join(".\\"+_problemStatement, 'Data'))
+    
 _param_list='Suburb=Abbotsford,Rooms=2,Type=h,Method=S,SellerG=Biggin,Date=2016-02-04 00:00:00.000,Distance=2.5,Postcode=3067,Bedroom2=2,Bathroom=1,Car=0,Landsize=156,BuildingArea=79,YearBuilt=1900,CouncilArea=Yarra'
 def Predict(_model, _param_list):
     #get model data
@@ -216,17 +230,19 @@ def Predict(_model, _param_list):
     return model.predict(pred_data)
     
     
-def train(_filePath):
+def train(_filePath,_problemStatement):
+    createDirectory(_filePath,_problemStatement)
+    #_filePath = 'fundamentals.csv'
     X,y = GetDataPostSanitization(_filePath)
     linearModel,score_LM,feature_indices,pred_LM,y_test_LM = GetLinearRegressorModelAndScore(X,y)
-    ExportClassifier(linearModel,"Linear_Model")
+    ExportClassifier(linearModel,'.\\'+_problemStatement+'\\Models'+"Linear_Model")
     RFModel,score_RF,predictions,y_test_RF = GetRandomForestModelAndScore(X,y)
-    ExportClassifier(RFModel,"Random_Forest_Model")
+    ExportClassifier(RFModel,'.\\'+_problemStatement+'\\Models'"Random_Forest_Model")
     GBModel,score_GB,pred_GB,y_test_GB = GetGradientBoostModelAndScore(X,y)
-    ExportClassifier(GBModel,"Gradient_Boost_Model")
-    plotModelScatter(y_test_LM,pred_LM,'linearModel',pred_LM.min(),pred_LM.max(),pred_LM.min(),pred_LM.max(),'blue')
-    plotModelScatter(y_test_RF,predictions,'RandomForestModel',predictions.min(),predictions.max(),predictions.min(),predictions.max(),'Green')
-    plotModelScatter(y_test_GB,pred_GB,'GradientBoostModel',0,1000000,0,1000000,'red')
+    ExportClassifier(GBModel,'.\\'+_problemStatement+'\\Models'"Gradient_Boost_Model")
+    plotModelScatter(y_test_LM,pred_LM,'.\\'+_problemStatement+'\\Plots'+'linearModel',pred_LM.min(),pred_LM.max(),pred_LM.min(),pred_LM.max(),'blue')
+    plotModelScatter(y_test_RF,predictions,'.\\'+_problemStatement+'\\Plots'+'RandomForestModel',predictions.min(),predictions.max(),predictions.min(),predictions.max(),'Green')
+    plotModelScatter(y_test_GB,pred_GB,'.\\'+_problemStatement+'\\Plots'+'GradientBoostModel',pred_GB.min(),pred_GB.max(),pred_GB.min(),pred_GB.max(),'red')
     return score_LM,score_RF,score_GB
     
 train("Melbourne_housing_data_blank_removed.csv")
