@@ -51,7 +51,7 @@ def GetOptimizedFeaturedDataSetLR(X, y):
 #MLRE Model
 def GenerateLinearRegressionModel(X_train,Y_train):
     lm = LinearRegression()
-    lm.fit(X_train,y_train)
+    lm.fit(X_train,Y_train)
     return lm 
 
 #Random Forest Model
@@ -60,22 +60,25 @@ def GenerateRandomForestModel(X_train, Y_train):
     reg.fit(X_train,Y_train)
     return reg
 
-def GetDataPostSanitization(_filePath):
+def GenerateGradientBoostModel(X_train, Y_train):
+    gradient_boost_reg = GradientBoostingRegressor(n_estimators=300,learning_rate=0.05,random_state=0)
+    grad_boost_model = gradient_boost_reg.fit(X_train,Y_train)
+    return grad_boost_model
+
+def GetDataFrameFromCSV(_filePath):
     dataframe =  pd.read_csv(_filePath)
-    dataframe.head()
-    
-    #Get Y value
-    y = pd.DataFrame(dataframe.iloc[:,-1])
-    #Drop Y value column
-    df_y_dropped = dataframe.drop(list(y.columns.values),axis=1)
-    
+    dataframe_blank_removed = dataframe.dropna(axis=0)
+    return dataframe_blank_removed
+
+
+def ConvertDateFieldsToDays(dataframe):
     #Date Cloumn Formatting
     #Get all String Columns name list
-    _str_Cols = list(df_y_dropped.select_dtypes(include=['object']).columns.values)
+    _str_Cols = list(dataframe.select_dtypes(include=['object']).columns.values)
     _str_Date_Col_Header = ""
     for cat in _str_Cols:
         try:
-            df_y_dropped[cat] = pd.to_datetime(df_y_dropped[cat],dayfirst=True)
+            dataframe[cat] = pd.to_datetime(dataframe[cat],dayfirst=True)
             #Assign column Name
             if _str_Date_Col_Header =="":
                 _str_Date_Col_Header = cat
@@ -84,22 +87,32 @@ def GetDataPostSanitization(_filePath):
             pass
             #print("Error")
     
-    all_Data = []
     #converting date in days in start
-    days_since_start = [(x - df_y_dropped[_str_Date_Col_Header].min()).days for x in df_y_dropped[_str_Date_Col_Header]]
-    df_y_dropped["Days"] = days_since_start
+    days_since_start = [(x - dataframe[_str_Date_Col_Header].min()).days for x in dataframe[_str_Date_Col_Header]]
+    dataframe["Days"] = days_since_start
     #drop date column
-    df_other=df_y_dropped.drop(_str_Date_Col_Header,axis=1)   
-    
+    df_other=dataframe.drop(_str_Date_Col_Header,axis=1)
+    return df_other
+
+def ConvertCategoricalDataInDummies(dataframe):
     #Converting categorical data into numbers
-    _str_Cols = list(df_y_dropped.select_dtypes(include=['object']).columns.values)    
-    dummies = pd.get_dummies(df_other,columns=_str_Cols)
+    _str_Cols = list(dataframe.select_dtypes(include=['object']).columns.values)    
+    dummies = pd.get_dummies(dataframe,columns=_str_Cols)
     
     #Drop last column for statistical data consistency
-    #dummies_other = dummies.drop(dummies.columns[len(dummies.columns)-1],axis=1)
-    all_Data = df_other.drop(df_other,axis=1).join(dummies)
-    #all_Data = df_other.drop(df_other,axis=1).join(dummies_other)
-    #return all_Data
+    return dataframe.drop(dataframe,axis=1).join(dummies)
+
+def GetDataPostSanitization(_filePath):
+    
+    dataframe= GetDataFrameFromCSV(_filePath)
+    #Get Y value
+    y = pd.DataFrame(dataframe.iloc[:,-1])
+    #Drop Y value column
+    df_y_dropped = dataframe.drop(list(y.columns.values),axis=1)
+    
+    df_y_dropped_date_converted = ConvertDateFieldsToDays(df_y_dropped)
+    all_Data = ConvertCategoricalDataInDummies(df_y_dropped_date_converted)  
+    
     return all_Data,y
 
 def SplitDataSetTrainTest(X,y):
@@ -137,8 +150,7 @@ def GetRandomForestModelAndScore(X, y):
 
 def GetGradientBoostModelAndScore(X,y):
     X_train, X_test, y_train, y_test = SplitDataSetTrainTest(X,y)
-    gradient_boost_reg = GradientBoostingRegressor(n_estimators=300,learning_rate=0.05,random_state=0)
-    grad_boost_model = gradient_boost_reg.fit(X_train,y_train)
+    grad_boost_model = GenerateGradientBoostModel(X_train,y_train)
     score_grad_boost = GetModelScore(grad_boost_model,X_train,y_train,10)
     preds = grad_boost_model.predict(X_test)
     return grad_boost_model,score_grad_boost.mean(),preds,y_test
@@ -173,7 +185,41 @@ def ImportClassifier(model_Name):
         return model
     except:
         return None
+
+_param_list='Suburb=Abbotsford,Rooms=2,Type=h,Method=S,SellerG=Biggin,Date=2016-02-04 00:00:00.000,Distance=2.5,Postcode=3067,Bedroom2=2,Bathroom=1,Car=0,Landsize=156,BuildingArea=79,YearBuilt=1900,CouncilArea=Yarra'
+def Predict(_model, _param_list):
+    #get model data
+    dataframe = GetDataFrameFromCSV("Melbourne_housing_data_blank_removed.csv")
+    dataframe_y_dropped = dataframe.drop(list(y.columns.values),axis=1)
+    model = ImportClassifier(_model)
+    _params = _param_list.split(",")
+    index=[]
+    value=[]
+    for param in _params:
+        index.append(param.split("=")[0])
+        try:
+            if "." in param.split("=")[1]:
+                value.append(float(param.split("=")[1]))
+            else:
+                value.append(int(param.split("=")[1]))
+        except:
+                value.append(param.split("=")[1])
+    new_dict = dict()
+    for val,key in zip(value,index):
+        new_dict[key]=val
+    
+    df=pd.DataFrame(new_dict,index=[0])
+    dataframes = [dataframe_y_dropped,df]
+    merged_dataframe = pd.concat(dataframes,ignore_index=True,axis=0)
+    merged_dataframe_date_converted = ConvertDateFieldsToDays(merged_dataframe)
+    merged_dataframe_date_converted_categories=ConvertCategoricalDataInDummies(merged_dataframe_date_converted)
+    #Get Last Row in Dataframe
+    pred_data = merged_dataframe_date_converted_categories.iloc[[-1]]
+    return model.predict(pred_data)
+    
+    
 def train(_filePath):
+    _filePath = "Melbourne_housing_data_blank_removed.csv"
     X,y = GetDataPostSanitization(_filePath)
     linearModel,score_LM,feature_indices,pred_LM,y_test_LM = GetLinearRegressorModelAndScore(X,y)
     ExportClassifier(linearModel,"Linear_Model")
