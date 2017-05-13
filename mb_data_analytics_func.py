@@ -146,9 +146,10 @@ def GetGradientBoostModelAndScore(X,y):
 def plotModelScatter(y_test_LM, pred_LM,plotName, x_low_lim=0,x_high_lim=1000000,y_low_lim=0,y_high_lim=1000000,color='red'):
     plt.ylim([y_low_lim,y_high_lim])
     plt.xlim([x_low_lim,x_high_lim])
-    plt.scatter(y_test_LM, pred_LM,color=color)
+    scatter = plt.scatter(y_test_LM, pred_LM,color=color)
     plt.savefig(plotName+'.png')
-
+    scatter.remove()
+    
 def GetHyperParametersTuned(model, X, y):
     # use a full grid over all parameters
     param_grid = {"max_depth": [None,10,100],
@@ -163,7 +164,7 @@ def GetHyperParametersTuned(model, X, y):
     return grid_search.best_params_
 
 def ExportClassifier(model, model_Name):
-    joblib.dump(model, 'model_Name'+'pk1')
+    joblib.dump(model, model_Name+'.pk1')
     return True
 
 def ImportClassifier(model_Name):
@@ -172,28 +173,15 @@ def ImportClassifier(model_Name):
         return model
     except:
         return None
-
-_param_list='Rooms=2,Distance=2.5,Postcode=3067,Bedroom2=2,Bathroom=1,Car=0,Landsize=156,BuildingArea=79,YearBuilt=1900,Days=0,Suburb=Abbotsford,Type=h,Method=S,SellerG=Biggin,CouncilArea=Yarra'
-def Predict(_model, _param_list):
-    model = ImportClassifier(_model)
-    _params = _param_list.split(",")
-    index=[]
-    value=[]
-    for param in _params:
-        index.append(param.split("=")[0])
-        value.append(param.split("=")[1])
-    df=pd.DataFrame(value,index).T
-    
 def train(_filePath):
     X,y = GetDataPostSanitization(_filePath)
     linearModel,score_LM,feature_indices,pred_LM,y_test_LM = GetLinearRegressorModelAndScore(X,y)
     ExportClassifier(linearModel,"Linear_Model")
     RFModel,score_RF,predictions,y_test_RF = GetRandomForestModelAndScore(X,y)
-    ExportClassifier(RFModel,"Linear_Model")
+    ExportClassifier(RFModel,"Random_Forest_Model")
     GBModel,score_GB,pred_GB,y_test_GB = GetGradientBoostModelAndScore(X,y)
-    ExportClassifier(GBModel,"Linear_Model")
+    ExportClassifier(GBModel,"Gradient_Boost_Model")
     plotModelScatter(y_test_LM,pred_LM,'linearModel',0,1000000,0,1000000,'blue')
     plotModelScatter(y_test_RF,predictions,'RandomForestModel',0,1000000,0,1000000,'Green')
     plotModelScatter(y_test_GB,pred_GB,'GradientBoostModel',0,1000000,0,1000000,'red')
-    
-train("Melbourne_housing_data_blank_removed.csv")
+    return score_LM,score_RF,score_GB
