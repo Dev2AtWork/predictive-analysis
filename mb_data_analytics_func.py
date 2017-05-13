@@ -103,7 +103,6 @@ def ConvertCategoricalDataInDummies(dataframe):
     return dataframe.drop(dataframe,axis=1).join(dummies)
 
 def GetDataPostSanitization(_filePath):
-    
     dataframe= GetDataFrameFromCSV(_filePath)
     #Get Y value
     y = pd.DataFrame(dataframe.iloc[:,-1])
@@ -144,7 +143,6 @@ def GetRandomForestModelAndScore(X, y):
     reg = RandomForestRegressor(n_estimators=500,random_state=0)
     reg.fit(X_train,y_train)
     score = GetModelScore(reg,X_train,y_train,10)
-    score = GetModelScore(reg,X,y,10)
     preds = reg.predict(X_test)
     return reg,score.mean(),preds,y_test
 
@@ -219,7 +217,6 @@ def Predict(_model, _param_list):
     
     
 def train(_filePath):
-    _filePath = "Melbourne_housing_data_blank_removed.csv"
     X,y = GetDataPostSanitization(_filePath)
     linearModel,score_LM,feature_indices,pred_LM,y_test_LM = GetLinearRegressorModelAndScore(X,y)
     ExportClassifier(linearModel,"Linear_Model")
@@ -227,7 +224,9 @@ def train(_filePath):
     ExportClassifier(RFModel,"Random_Forest_Model")
     GBModel,score_GB,pred_GB,y_test_GB = GetGradientBoostModelAndScore(X,y)
     ExportClassifier(GBModel,"Gradient_Boost_Model")
-    plotModelScatter(y_test_LM,pred_LM,'linearModel',0,1000000,0,1000000,'blue')
-    plotModelScatter(y_test_RF,predictions,'RandomForestModel',0,1000000,0,1000000,'Green')
+    plotModelScatter(y_test_LM,pred_LM,'linearModel',pred_LM.min(),pred_LM.max(),pred_LM.min(),pred_LM.max(),'blue')
+    plotModelScatter(y_test_RF,predictions,'RandomForestModel',predictions.min(),predictions.max(),predictions.min(),predictions.max(),'Green')
     plotModelScatter(y_test_GB,pred_GB,'GradientBoostModel',0,1000000,0,1000000,'red')
     return score_LM,score_RF,score_GB
+    
+train("Melbourne_housing_data_blank_removed.csv")
