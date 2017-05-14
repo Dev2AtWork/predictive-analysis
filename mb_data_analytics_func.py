@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Mon May  8 13:13:58 2017
-
 @author: abhin067
 """
 #%matplotlib inline
@@ -9,28 +8,22 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import statsmodels.formula.api as st
-import seaborn as sns
-import bisect
-import tensorflow
 from sklearn.feature_selection import SelectKBest 
 from sklearn.feature_selection import f_regression
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.cross_validation import train_test_split
-from datetime import date
 from sklearn.model_selection import cross_val_score
-from sklearn.metrics import accuracy_score
 from sklearn.externals import joblib
 from sklearn.model_selection import GridSearchCV
-from time import time
 import configparser
-from sklearn.externals import joblib
 from sklearn.ensemble import GradientBoostingRegressor
 import shutil
 import os
+import math
 
-config = configparser.ConfigParser()
-config.read("config.ini")
+config = configparser.RawConfigParser()
+config.read("C:/Users/animeshl913/Desktop/Hack-A-Thon 2017/MachineLearnngWebAPI/restapp/config.ini")
 _filepath = config.get("File","filepath")
 
 def GetOptimizedFeaturedDataSetLR(X, y):
@@ -98,7 +91,6 @@ def ConvertDateFieldsToDays(dataframe):
     return df_other
 
 def ConvertCategoricalDataInDummies(dataframe):
-    dataframe=df_y_dropped_date_converted
     #Converting categorical data into numbers
     _str_Cols = list(dataframe.select_dtypes(include=['object']).columns.values)    
     dummies = pd.get_dummies(dataframe,columns=_str_Cols)    
@@ -198,11 +190,18 @@ def createDirectory(_filePath,_problemStatement):
     #Copying data files
     shutil.copy2(_filePath, os.path.join(".\\"+_problemStatement, 'Data'))
     
-_param_list='Suburb=Abbotsford,Rooms=2,Type=h,Method=S,SellerG=Biggin,Date=2016-02-04 00:00:00.000,Distance=2.5,Postcode=3067,Bedroom2=2,Bathroom=1,Car=0,Landsize=156,BuildingArea=79,YearBuilt=1900,CouncilArea=Yarra'
-def Predict(_model, _param_list):
+def logdataOnConfigINI(_problemStatement,selectedModel,accuracyScore):
+    configpath='C:/Users/animeshl913/Desktop/Hack-A-Thon 2017/MachineLearnngWebAPI/restapp/config.ini'
+    config.set('Outputs',_problemStatement,selectedModel+"|"+accuracyScore)
+    with open(configpath,'w') as configfile:
+        config.write(configfile)
+        
+#_param_list='Suburb=Abbotsford,Rooms=2,Type=h,Method=S,SellerG=Biggin,Date=2016-02-04 00:00:00.000,Distance=2.5,Postcode=3067,Bedroom2=2,Bathroom=1,Car=0,Landsize=156,BuildingArea=79,YearBuilt=1900,CouncilArea=Yarra'
+def Predict(_param_list):
     #get model data
-    dataframe = GetDataFrameFromCSV("Melbourne_housing_data_blank_removed.csv")
-    dataframe_y_dropped = dataframe.drop(list(y.columns.values),axis=1)
+    dataframe = GetDataFrameFromCSV(".\Melbourne Housing Prediction\Data\Melbourne_housing_data_blank_removed.csv")
+    dataframe_y_dropped = dataframe.drop("Price",axis=1)
+    _model='.\\Melbourne Housing Prediction\\Models\\Gradient_Boost_Model.pk1'
     model = ImportClassifier(_model)
     _params = _param_list.split(",")
     index=[]
@@ -227,7 +226,8 @@ def Predict(_model, _param_list):
     merged_dataframe_date_converted_categories=ConvertCategoricalDataInDummies(merged_dataframe_date_converted)
     #Get Last Row in Dataframe
     pred_data = merged_dataframe_date_converted_categories.iloc[[-1]]
-    return model.predict(pred_data)
+    pred = model.predict(pred_data)
+    return str(math.floor(pred*0.9)) + "-" + str(math.floor(pred*1.1))
     
     
 def train(_filePath,_problemStatement):
@@ -235,14 +235,15 @@ def train(_filePath,_problemStatement):
     #_filePath = 'fundamentals.csv'
     X,y = GetDataPostSanitization(_filePath)
     linearModel,score_LM,feature_indices,pred_LM,y_test_LM = GetLinearRegressorModelAndScore(X,y)
-    ExportClassifier(linearModel,'.\\'+_problemStatement+'\\Models'+"Linear_Model")
+    ExportClassifier(linearModel,'.\\'+_problemStatement+'\\Models\\'+"Linear_Model")
     RFModel,score_RF,predictions,y_test_RF = GetRandomForestModelAndScore(X,y)
-    ExportClassifier(RFModel,'.\\'+_problemStatement+'\\Models'"Random_Forest_Model")
+    ExportClassifier(RFModel,'.\\'+_problemStatement+'\\Models\\'+"Random_Forest_Model")
     GBModel,score_GB,pred_GB,y_test_GB = GetGradientBoostModelAndScore(X,y)
-    ExportClassifier(GBModel,'.\\'+_problemStatement+'\\Models'"Gradient_Boost_Model")
-    plotModelScatter(y_test_LM,pred_LM,'.\\'+_problemStatement+'\\Plots'+'linearModel',pred_LM.min(),pred_LM.max(),pred_LM.min(),pred_LM.max(),'blue')
-    plotModelScatter(y_test_RF,predictions,'.\\'+_problemStatement+'\\Plots'+'RandomForestModel',predictions.min(),predictions.max(),predictions.min(),predictions.max(),'Green')
-    plotModelScatter(y_test_GB,pred_GB,'.\\'+_problemStatement+'\\Plots'+'GradientBoostModel',pred_GB.min(),pred_GB.max(),pred_GB.min(),pred_GB.max(),'red')
-    return score_LM,score_RF,score_GB
-    
-train("Melbourne_housing_data_blank_removed.csv")
+    ExportClassifier(GBModel,'.\\'+_problemStatement+'\\Models\\'+"Gradient_Boost_Model")
+    plotModelScatter(y_test_LM,pred_LM,'.\\'+_problemStatement+'\\Plots\\'+'linearModel',0,pred_LM.max(),0,pred_LM.max(),'blue')
+    plotModelScatter(y_test_RF,predictions,'.\\'+_problemStatement+'\\Plots\\'+'RandomForestModel',0,predictions.max(),0,predictions.max(),'Green')
+    plotModelScatter(y_test_GB,pred_GB,'.\\'+_problemStatement+'\\Plots\\'+'GradientBoostModel',0,pred_GB.max(),0,pred_GB.max(),'red')
+    new_dict={'LM':score_LM,'RF':score_RF,'GB':score_GB}    
+    selectedMOdel=max(new_dict, key=lambda i:new_dict[i])
+    logdataOnConfigINI(_problemStatement,str(selectedMOdel),str(new_dict.get(selectedMOdel)))
+    return new_dict,selectedMOdel
