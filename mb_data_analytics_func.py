@@ -19,8 +19,10 @@ from sklearn.model_selection import GridSearchCV
 import configparser
 from sklearn.ensemble import GradientBoostingRegressor
 import shutil
+from os import listdir
 import os
 import math
+import base64
 
 config = configparser.RawConfigParser()
 config.read("C:/Users/animeshl913/Desktop/Hack-A-Thon 2017/MachineLearnngWebAPI/restapp/config.ini")
@@ -68,7 +70,7 @@ def GetDataFrameFromCSV(_filePath):
 
 
 def ConvertDateFieldsToDays(dataframe):
-    #Date Cloumn Formatting
+    #Date Cloumn Formattingdataframe=df_y_dropped
     #Get all String Columns name list
     _str_Cols = list(dataframe.select_dtypes(include=['object']).columns.values)
     if len(_str_Cols)!= 0 :
@@ -120,16 +122,16 @@ def GetLinearRegressorModelAndScore(X, y):
     X = np.append(arr=np.ones((X.shape[0],1)).astype(int),values=X,axis=1)    
     X_train, X_test, y_train, y_test = SplitDataSetTrainTest(X,y)    
     #Get best Features
-    X_best_fit,indices = GetOptimizedFeaturedDataSetLR(X_train,y_train)
+    #X_best_fit,indices = GetOptimizedFeaturedDataSetLR(X_train,y_train)
     
     #Get MLRE model
-    lm = GenerateLinearRegressionModel(X_best_fit,y_train)
-    score = GetModelScore(lm,X_best_fit,y_train,100)
+    lm = GenerateLinearRegressionModel(X_train,y_train)
+    score = GetModelScore(lm,X_train,y_train,100)
     score_in_range = list(filter(lambda x:((x>=-1.0)&(x<=1.0)),score))
-    X_test_feature_transformed = X_test[0]
-    X_test_feature_transformed = (pd.DataFrame(X_test))[indices.tolist()]
-    pred = lm.predict(X_test_feature_transformed)
-    return lm,np.mean(score_in_range),indices,pred,y_test
+    #X_test_feature_transformed = X_test[0]
+    #X_test_feature_transformed = (pd.DataFrame(X_test))[indices.tolist()]
+    pred = lm.predict(X_test)
+    return lm,np.mean(score_in_range),np.std(score_in_range),pred,y_test
 
 def GetModelScore(model, X_train, y_train, CV):
     return cross_val_score(estimator=model,X=X_train,y=y_train,cv=CV)
@@ -141,14 +143,14 @@ def GetRandomForestModelAndScore(X, y):
     reg.fit(X_train,y_train)
     score = GetModelScore(reg,X_train,y_train,10)
     preds = reg.predict(X_test)
-    return reg,score.mean(),preds,y_test
+    return reg,score.mean(),np.std(score),preds,y_test
 
 def GetGradientBoostModelAndScore(X,y):
     X_train, X_test, y_train, y_test = SplitDataSetTrainTest(X,y)
     grad_boost_model = GenerateGradientBoostModel(X_train,y_train)
     score_grad_boost = GetModelScore(grad_boost_model,X_train,y_train,10)
     preds = grad_boost_model.predict(X_test)
-    return grad_boost_model,score_grad_boost.mean(),preds,y_test
+    return grad_boost_model,score_grad_boost.mean(),np.std(score_grad_boost),preds,y_test
 
 def plotModelScatter(y_test_LM, pred_LM,plotName, x_low_lim=0,x_high_lim=1000000,y_low_lim=0,y_high_lim=1000000,color='red'):
     plt.ylim([y_low_lim,y_high_lim])
@@ -231,29 +233,81 @@ def Predict(_param_list):
     pred = model.predict(pred_data)
     return str(math.floor(pred*0.9)) + "-" + str(math.floor(pred*1.1))
     
-    
+
+
+#Train Model    
 def train(_filePath,_problemStatement):
     createDirectory(_filePath,_problemStatement)
-    #_filePath = 'fundamentals.csv'
     X,y = GetDataPostSanitization(_filePath)
-    linearModel,score_LM,feature_indices,pred_LM,y_test_LM = GetLinearRegressorModelAndScore(X,y)
+    linearModel,score_LM,score_LM_std,pred_LM,y_test_LM = GetLinearRegressorModelAndScore(X,y)
     ExportClassifier(linearModel,'.\\'+_problemStatement+'\\Models\\'+"Linear_Model")
-    RFModel,score_RF,predictions,y_test_RF = GetRandomForestModelAndScore(X,y)
+    RFModel,score_RF,score_RF_std,predictions,y_test_RF = GetRandomForestModelAndScore(X,y)
     ExportClassifier(RFModel,'.\\'+_problemStatement+'\\Models\\'+"Random_Forest_Model")
-    GBModel,score_GB,pred_GB,y_test_GB = GetGradientBoostModelAndScore(X,y)
+    GBModel,score_GB,score_GB_std,pred_GB,y_test_GB = GetGradientBoostModelAndScore(X,y)
     ExportClassifier(GBModel,'.\\'+_problemStatement+'\\Models\\'+"Gradient_Boost_Model")
     plotModelScatter(y_test_LM,pred_LM,'.\\'+_problemStatement+'\\Plots\\'+'linearModel',0,pred_LM.max(),0,pred_LM.max(),'blue')
     plotModelScatter(y_test_RF,predictions,'.\\'+_problemStatement+'\\Plots\\'+'RandomForestModel',0,predictions.max(),0,predictions.max(),'Green')
     plotModelScatter(y_test_GB,pred_GB,'.\\'+_problemStatement+'\\Plots\\'+'GradientBoostModel',0,pred_GB.max(),0,pred_GB.max(),'red')
+    with open('.\\'+_problemStatement+'\\Plots\\'+'linearModel'+'.png', "rb") as image_file:
+        encoded_linearModel = base64.b64encode(image_file.read())
+    with open('.\\'+_problemStatement+'\\Plots\\'+'RandomForestModel'+'.png', "rb") as image_file:
+        encoded_RandomForestModel = base64.b64encode(image_file.read())
+    with open('.\\'+_problemStatement+'\\Plots\\'+'GradientBoostModel'+'.png', "rb") as image_file:
+        encoded_GradientBoostModel = base64.b64encode(image_file.read())
     new_dict={'LM':score_LM,'RF':score_RF,'GB':score_GB}    
+    new_dicto={'LM_std':score_LM_std,'RF_std':score_RF_std,'GB_std':score_GB_std}
+    new_dict.update(new_dicto)
     new_dict['selectedMOdel']=max(new_dict, key=lambda i:new_dict[i])
     logdataOnConfigINI(_problemStatement,str(new_dict['selectedMOdel']),str(new_dict.get(new_dict['selectedMOdel'])))
+    new_dict.update({'LM_img':str(encoded_linearModel),'RF_img':str(encoded_RandomForestModel),'GB_img':str(encoded_GradientBoostModel)})
     return new_dict
 
 
-    
+#Retrain Model
+def reTrain(_filePath,_problemStatement):
+    #_filePath='C:/training_files/ConcreteData2.csv'
+    #_problemStatement='Concrete Compressive Stength'
+    if os.path.exists('.\\'+_problemStatement+'\\Data\\'):
+        filenames = listdir('.\\'+_problemStatement+'\\Data\\')
+        csvfilenames= [ filename for filename in filenames if filename.endswith('.csv') ]        
+        dataframes_old=[]
+        for csvfilename in csvfilenames:
+            dataframes_old.append(pd.read_csv('.\\'+_problemStatement+'\\Data\\'+csvfilename))
+        newfile = pd.read_csv(_filePath)
+        dataframes_old.append(newfile)
+        merged_dataframe = pd.concat(dataframes_old,ignore_index=True,axis=0)
+    y = pd.DataFrame(merged_dataframe.iloc[:,-1])
+    #Drop Y value column
+    df_y_dropped = merged_dataframe.drop(list(y.columns.values),axis=1)
+    df_y_dropped_date_converted = ConvertDateFieldsToDays(df_y_dropped)
+    all_Data = ConvertCategoricalDataInDummies(df_y_dropped_date_converted)
+    #merged_dataframe.to_csv('.\\'+_problemStatement+'\\Data\\'+csvfilename, sep='\t')
+    linearModel,score_LM,score_LM_std,pred_LM,y_test_LM = GetLinearRegressorModelAndScore(all_Data,y)
+    ExportClassifier(linearModel,'.\\'+_problemStatement+'\\Models\\'+"Linear_Model")
+    RFModel,score_RF,score_RF_std,predictions,y_test_RF = GetRandomForestModelAndScore(all_Data,y)
+    ExportClassifier(RFModel,'.\\'+_problemStatement+'\\Models\\'+"Random_Forest_Model")
+    GBModel,score_GB,score_GB_std,pred_GB,y_test_GB = GetGradientBoostModelAndScore(all_Data,y)
+    ExportClassifier(GBModel,'.\\'+_problemStatement+'\\Models\\'+"Gradient_Boost_Model")
+    plotModelScatter(y_test_LM,pred_LM,'.\\'+_problemStatement+'\\Plots\\'+'linearModel',0,pred_LM.max(),0,pred_LM.max(),'blue')
+    plotModelScatter(y_test_RF,predictions,'.\\'+_problemStatement+'\\Plots\\'+'RandomForestModel',0,predictions.max(),0,predictions.max(),'Green')
+    plotModelScatter(y_test_GB,pred_GB,'.\\'+_problemStatement+'\\Plots\\'+'GradientBoostModel',0,pred_GB.max(),0,pred_GB.max(),'red')
+    with open('.\\'+_problemStatement+'\\Plots\\'+'linearModel'+'.png', "r") as image_file:
+        encoded_linearModel = base64.b64encode(image_file.read())
+    with open('.\\'+_problemStatement+'\\Plots\\'+'RandomForestModel'+'.png', "r") as image_file:
+        encoded_RandomForestModel = base64.b64encode(image_file.read())
+    with open('.\\'+_problemStatement+'\\Plots\\'+'GradientBoostModel'+'.png', "r") as image_file:
+        encoded_GradientBoostModel = base64.b64encode(image_file.read())
+    new_dict={'LM':score_LM,'RF':score_RF,'GB':score_GB}    
+    new_dicto={'LM_std':score_LM_std,'RF_std':score_RF_std,'GB_std':score_GB_std}
+    new_dict.update(new_dicto)
+    new_dict['selectedMOdel']=max(new_dict, key=lambda i:new_dict[i])
+    logdataOnConfigINI(_problemStatement,str(new_dict['selectedMOdel']),str(new_dict.get(new_dict['selectedMOdel'])))
+    shutil.copy2(_filePath, os.path.join(".\\"+_problemStatement, 'Data'))
+    new_dict.update({'LM_img':str(encoded_linearModel),'RF_img':str(encoded_RandomForestModel),'GB_img':str(encoded_GradientBoostModel)})
+    return  new_dict
+
+#All Problem Statements  
 def getProblemStatements():    
     problemStatements = []
     for key in config['Outputs']: problemStatements.append(key)
     return problemStatements
-    train("C:/Users/animeshl913/Desktop/Hack-A-Thon 2017/ConcreteData.csv","ConcreteStrength")
