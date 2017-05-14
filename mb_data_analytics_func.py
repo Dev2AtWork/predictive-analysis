@@ -71,25 +71,27 @@ def ConvertDateFieldsToDays(dataframe):
     #Date Cloumn Formatting
     #Get all String Columns name list
     _str_Cols = list(dataframe.select_dtypes(include=['object']).columns.values)
-    _str_Date_Col_Header = ""
-    for cat in _str_Cols:
-        try:
-            dataframe[cat] = pd.to_datetime(dataframe[cat],dayfirst=True)
-            #Assign column Name
-            if _str_Date_Col_Header =="":
-                _str_Date_Col_Header = cat
-        except:
-            #do nothing
-            pass
-            #print("Error")
+    if len(_str_Cols)!= 0 :
+        _str_Date_Col_Header = ""
+        for cat in _str_Cols:
+            try:
+                dataframe[cat] = pd.to_datetime(dataframe[cat],dayfirst=True)
+                #Assign column Name
+                if _str_Date_Col_Header =="":
+                    _str_Date_Col_Header = cat
+            except:
+                #do nothing
+                pass
+                #print("Error")
+        
+        #converting date in days in start
+        days_since_start = [(x - dataframe[_str_Date_Col_Header].min()).days for x in dataframe[_str_Date_Col_Header]]
+        dataframe["Days"] = days_since_start
+        #drop date column
+        df_other=dataframe.drop(_str_Date_Col_Header,axis=1)
+        return df_other
+    return dataframe
     
-    #converting date in days in start
-    days_since_start = [(x - dataframe[_str_Date_Col_Header].min()).days for x in dataframe[_str_Date_Col_Header]]
-    dataframe["Days"] = days_since_start
-    #drop date column
-    df_other=dataframe.drop(_str_Date_Col_Header,axis=1)
-    return df_other
-
 def ConvertCategoricalDataInDummies(dataframe):
     #Converting categorical data into numbers
     _str_Cols = list(dataframe.select_dtypes(include=['object']).columns.values)    
@@ -180,12 +182,12 @@ def ImportClassifier(model_Name):
         return None
 
 def createDirectory(_filePath,_problemStatement):
-    if os.path.exists(_problemStatement):
-        shutil.rmtree(_problemStatement)
-    os.makedirs(_problemStatement)
-    os.makedirs(os.path.join(_problemStatement, 'Data'))
-    os.makedirs(os.path.join(_problemStatement, 'Plots'))
-    os.makedirs(os.path.join(_problemStatement, 'Models'))
+    if not os.path.exists(_problemStatement):
+        #shutil.rmtree(_problemStatement)
+        os.makedirs(_problemStatement)
+        os.makedirs(os.path.join(_problemStatement, 'Data'))
+        os.makedirs(os.path.join(_problemStatement, 'Plots'))
+        os.makedirs(os.path.join(_problemStatement, 'Models'))
 
     #Copying data files
     shutil.copy2(_filePath, os.path.join(".\\"+_problemStatement, 'Data'))
@@ -244,6 +246,14 @@ def train(_filePath,_problemStatement):
     plotModelScatter(y_test_RF,predictions,'.\\'+_problemStatement+'\\Plots\\'+'RandomForestModel',0,predictions.max(),0,predictions.max(),'Green')
     plotModelScatter(y_test_GB,pred_GB,'.\\'+_problemStatement+'\\Plots\\'+'GradientBoostModel',0,pred_GB.max(),0,pred_GB.max(),'red')
     new_dict={'LM':score_LM,'RF':score_RF,'GB':score_GB}    
-    selectedMOdel=max(new_dict, key=lambda i:new_dict[i])
-    logdataOnConfigINI(_problemStatement,str(selectedMOdel),str(new_dict.get(selectedMOdel)))
-    return new_dict,selectedMOdel
+    new_dict['selectedMOdel']=max(new_dict, key=lambda i:new_dict[i])
+    logdataOnConfigINI(_problemStatement,str(new_dict['selectedMOdel']),str(new_dict.get(new_dict['selectedMOdel'])))
+    return new_dict
+
+
+    
+def getProblemStatements():    
+    problemStatements = []
+    for key in config['Outputs']: problemStatements.append(key)
+    return problemStatements
+    train("C:/Users/animeshl913/Desktop/Hack-A-Thon 2017/ConcreteData.csv","ConcreteStrength")
